@@ -8,6 +8,28 @@
                                        FROM stvrsts b
                                       WHERE b.stvrsts_incl_sect_enrl = 'Y')
       ),
+test_scores AS (
+    SELECT a.sortest_pidm,
+           a.sortest_tesc_code,
+           a.sortest_test_score
+      FROM (SELECT aa.sortest_pidm,
+                   -- We do not care if the test is more or less than two years old, so we collapse codes.
+                   CASE WHEN aa.sortest_tesc_code IN ('A02','A02N') THEN 'A02'
+                        WHEN aa.sortest_tesc_code IN ('ALEKS','ALEKSN') THEN 'ALEKS'
+                        ELSE aa.sortest_tesc_code
+                        END AS sortest_tesc_code,
+                   aa.sortest_test_score,
+                   RANK() OVER (PARTITION BY aa.sortest_pidm,
+                                             CASE WHEN aa.sortest_tesc_code IN ('A02','A02N') THEN 'A02'
+                                             WHEN aa.sortest_tesc_code IN ('ALEKS','ALEKSN') THEN 'ALEKS'
+                                             ELSE aa.sortest_tesc_code
+                                             END
+                                    ORDER BY aa.sortest_test_score DESC) AS rowrank
+              FROM sortest aa
+             WHERE aa.sortest_tesc_code IN ('A02','A02N','A01','A05','CPTW','ALEKS','ALEKSN')) a
+      WHERE a.rowrank = 1
+       ),
+
 student_list AS (
       SELECT f.sfrstcr_term_code AS term_code,
              g.stvterm_desc,
@@ -277,36 +299,21 @@ LEFT JOIN (SELECT shrlgpa_pidm,
        AND n.sgbstdn_term_code_eff = '202140'
  LEFT JOIN stvresd p
         ON n.sgbstdn_resd_code = p.stvresd_code
- LEFT JOIN (SELECT q2.sortest_pidm,
-                   MAX(q2.sortest_test_score) AS sortest_test_score
-              FROM sortest q2
-             WHERE q2.sortest_tesc_code IN ('A02N','A02')
-          GROUP BY q2.sortest_pidm) q
+ LEFT JOIN test_scores q
         ON a.student_pidm = q.sortest_pidm
- LEFT JOIN (SELECT s2.sortest_pidm,
-                   MAX(s2.sortest_test_score) AS sortest_test_score
-              FROM sortest s2
-             WHERE s2.sortest_tesc_code IN ('A01')
-            GROUP BY s2.sortest_pidm) s
+       AND q.sortest_tesc_code = 'A02'
+ LEFT JOIN test_scores s
         ON a.student_pidm = s.sortest_pidm
- LEFT JOIN (SELECT t2.sortest_pidm,
-                   MAX(t2.sortest_test_score) AS sortest_test_score
-              FROM sortest t2
-             WHERE t2.sortest_tesc_code IN ('A05')
-            GROUP BY t2.sortest_pidm) t
+       AND s.sortest_tesc_code = 'A01'
+ LEFT JOIN test_scores t
         ON a.student_pidm = t.sortest_pidm
- LEFT JOIN (SELECT v2.sortest_pidm,
-                   MAX(v2.sortest_test_score) AS sortest_test_score
-              FROM sortest v2
-             WHERE v2.sortest_tesc_code IN ('CPTW')
-            GROUP BY v2.sortest_pidm) v
+       AND t.sortest_tesc_code = 'A05'
+ LEFT JOIN sortest v
         ON a.student_pidm = v.sortest_pidm
- LEFT JOIN (SELECT w2.sortest_pidm,
-                   MAX(w2.sortest_test_score) AS sortest_test_score
-              FROM sortest w2
-             WHERE w2.sortest_tesc_code IN ('ALEKS','ALEKSN')
-            GROUP BY w2.sortest_pidm) w
+       AND v.sortest_tesc_code = 'CPTW'
+ LEFT JOIN sortest w
         ON a.student_pidm = w.sortest_pidm
+       AND w.sortest_tesc_code = 'ALEKS'
  LEFT JOIN sfrblpa r
         ON a.student_pidm = r.sfrblpa_pidm
        AND r.sfrblpa_term_code = '202140'
@@ -314,10 +321,10 @@ LEFT JOIN (SELECT shrlgpa_pidm,
                    CASE WHEN uu.sorhsch_sbgi_code IN ('459995','960000') THEN 'GED'
                         ELSE uu.sorhsch_gpa
                         END AS sorhsch_gpa,
-                   ROW_NUMBER() over (PARTITION BY uu.sorhsch_pidm ORDER BY uu.sorhsch_graduation_date DESC) AS rn
+                   ROW_NUMBER() OVER (PARTITION BY uu.sorhsch_pidm ORDER BY uu.sorhsch_graduation_date DESC) AS rn
               FROM sorhsch uu
              WHERE uu.sorhsch_gpa IS NOT NULL
                 OR uu.sorhsch_sbgi_code IN ('459995','960000') ) u
         ON a.student_pidm = u.sorhsch_pidm
        AND u.rn = 1
-  ; 
+  ;
