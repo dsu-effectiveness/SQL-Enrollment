@@ -66,8 +66,6 @@ stus AS (
            b.spriden_first_name AS first_name,
            b.spriden_last_name AS last_name,
            f.hsgpact_hsgpact AS index_score,
-           f.hsgpact_act AS act_score,
-           f.hsgpact_gpa AS hs_gpa,
            a.stvcoll_desc,
            j.smrprle_program_desc AS program,
            h.sfbetrm_initial_reg_date AS initial_reg_date,
@@ -76,6 +74,7 @@ stus AS (
            k.registration_holds,
            k.graduation_holds,
            k.hold_description,
+           n.waitlisted,
            LISTAGG(CASE WHEN d.ssbsect_subj_code = 'ENGL' THEN d.ssbsect_subj_code || d.ssbsect_crse_numb ELSE NULL
                         END, ', ') WITHIN GROUP (ORDER BY d.ssbsect_crse_numb) AS engl_registered,
            LISTAGG(CASE WHEN d.ssbsect_subj_code = 'MATH' THEN d.ssbsect_subj_code || d.ssbsect_crse_numb ELSE NULL
@@ -135,6 +134,25 @@ stus AS (
                       AND dd.ssbsect_ssts_code = 'A'
                     GROUP BY cc.sfrstcr_pidm) gg
         ON a.student_pidm = gg.sfrstcr_pidm
+ LEFT JOIN (SELECT mm.sfrstcr_pidm,
+                   LISTAGG(CASE WHEN dd.ssbsect_subj_code NOT IN ('ENGL', 'MATH') THEN dd.ssbsect_subj_code || dd.ssbsect_crse_numb ELSE NULL
+                                END, ', ' ON overflow truncate without count)
+                                WITHIN GROUP (ORDER BY dd.ssbsect_crse_numb) AS waitlisted
+              FROM (SELECT DISTINCT
+                           sfrstcr_term_code,
+                           sfrstcr_pidm,
+                           sfrstcr_crn
+                      FROM sfrstcr
+                     WHERE sfrstcr_camp_code <> 'XXX'
+                       AND sfrstcr_levl_code = 'UG'
+                       AND sfrstcr_term_code = '202140'
+                       AND sfrstcr_rsts_code = 'WL') mm
+                LEFT JOIN ssbsect dd
+                       ON mm.sfrstcr_crn = dd.ssbsect_crn
+                      AND mm.sfrstcr_term_code = dd.ssbsect_term_code
+                      AND dd.ssbsect_ssts_code = 'A'
+                    GROUP BY mm.sfrstcr_pidm) n
+        ON a.student_pidm = n.sfrstcr_pidm
  LEFT JOIN dsc.hsgpact f
         ON a.student_pidm = f.hsgpact_pidm
  LEFT JOIN sgbstdn g
@@ -180,8 +198,6 @@ LEFT JOIN (SELECT shrlgpa_pidm,
            b.spriden_first_name,
            b.spriden_last_name,
            f.hsgpact_hsgpact,
-           f.hsgpact_act,
-           f.hsgpact_gpa,
            a.stvcoll_desc,
            j.smrprle_program_desc,
            h.sfbetrm_initial_reg_date,
@@ -189,6 +205,7 @@ LEFT JOIN (SELECT shrlgpa_pidm,
            k.registration_holds,
            k.graduation_holds,
            k.hold_description,
+           n.waitlisted,
            gg.engl_prior,
            gg.math_prior,
            gg.oth_prior
@@ -211,10 +228,12 @@ LEFT JOIN (SELECT shrlgpa_pidm,
                 END AS pell_award,
            p.stvresd_desc,
            a.index_score,
-           a.act_score,
+           t.sortest_test_score AS act_score,
            q.sortest_test_score AS act_math,
            s.sortest_test_score AS act_english,
-           a.hs_gpa,
+           u.sorhsch_gpa AS hs_gpa,
+           v.sortest_test_score AS accuplacer_wri,
+           w.sortest_test_score AS aleks,
            a.stvcoll_desc,
            a.program,
            TRUNC(a.initial_reg_date) AS initial_reg_date,
@@ -225,6 +244,7 @@ LEFT JOIN (SELECT shrlgpa_pidm,
            a.registration_holds,
            a.graduation_holds,
            a.hold_description,
+           a.waitlisted,
            a.engl_registered,
            a.math_registered,
            a.fye_registered,
@@ -264,8 +284,37 @@ LEFT JOIN (SELECT shrlgpa_pidm,
              WHERE s2.sortest_tesc_code IN ('A01')
             GROUP BY s2.sortest_pidm) s
         ON a.student_pidm = s.sortest_pidm
+ LEFT JOIN (SELECT t2.sortest_pidm,
+                   MAX(t2.sortest_test_score) AS sortest_test_score
+              FROM sortest t2
+             WHERE t2.sortest_tesc_code IN ('A05')
+            GROUP BY t2.sortest_pidm) t
+        ON a.student_pidm = t.sortest_pidm
+ LEFT JOIN (SELECT v2.sortest_pidm,
+                   MAX(v2.sortest_test_score) AS sortest_test_score
+              FROM sortest v2
+             WHERE v2.sortest_tesc_code IN ('CPTW')
+            GROUP BY v2.sortest_pidm) v
+        ON a.student_pidm = v.sortest_pidm
+ LEFT JOIN (SELECT w2.sortest_pidm,
+                   MAX(w2.sortest_test_score) AS sortest_test_score
+              FROM sortest w2
+             WHERE w2.sortest_tesc_code IN ('ALEKS','ALEKSN')
+            GROUP BY w2.sortest_pidm) w
+        ON a.student_pidm = w.sortest_pidm
  LEFT JOIN sfrblpa r
         ON a.student_pidm = r.sfrblpa_pidm
        AND r.sfrblpa_term_code = '202140'
+ LEFT JOIN (SELECT uu.sorhsch_pidm,
+                   CASE WHEN uu.sorhsch_sbgi_code IN ('459995','960000') THEN 'GED'
+                        ELSE uu.sorhsch_gpa
+                        END AS sorhsch_gpa,
+                   ROW_NUMBER() over (PARTITION BY uu.sorhsch_pidm ORDER BY uu.sorhsch_graduation_date DESC) AS rn
+              FROM sorhsch uu
+             WHERE uu.sorhsch_gpa IS NOT NULL
+                OR uu.sorhsch_sbgi_code IN ('459995','960000') ) u
+        ON a.student_pidm = u.sorhsch_pidm
+       AND u.rn = 1
   ;
+
 
