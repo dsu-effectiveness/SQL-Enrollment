@@ -100,7 +100,7 @@ stus AS (
            k.graduation_holds,
            k.hold_description,
            n.waitlisted,
-           LISTAGG(x.shrtmcm_comment, ', ') AS ap_courses,
+           LISTAGG(REPLACE(SUBSTR(x.shrtmcm_comment, 11),' test score -',''), ', ') AS ap_courses,
            LISTAGG(CASE WHEN d.ssbsect_subj_code = 'ENGL' THEN d.ssbsect_subj_code || d.ssbsect_crse_numb ELSE NULL
                         END, ', ') WITHIN GROUP (ORDER BY d.ssbsect_crse_numb) AS engl_registered,
            LISTAGG(CASE WHEN d.ssbsect_subj_code = 'MATH' THEN d.ssbsect_subj_code || d.ssbsect_crse_numb ELSE NULL
