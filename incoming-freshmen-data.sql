@@ -75,6 +75,7 @@ stus AS (
            k.graduation_holds,
            k.hold_description,
            n.waitlisted,
+           LISTAGG(x.shrtmcm_comment, ', ') AS ap_courses,
            LISTAGG(CASE WHEN d.ssbsect_subj_code = 'ENGL' THEN d.ssbsect_subj_code || d.ssbsect_crse_numb ELSE NULL
                         END, ', ') WITHIN GROUP (ORDER BY d.ssbsect_crse_numb) AS engl_registered,
            LISTAGG(CASE WHEN d.ssbsect_subj_code = 'MATH' THEN d.ssbsect_subj_code || d.ssbsect_crse_numb ELSE NULL
@@ -189,6 +190,9 @@ LEFT JOIN (SELECT shrlgpa_pidm,
                   shrlgpa_gpa_type_ind) m
         ON a.student_pidm = m.shrlgpa_pidm
        AND m.shrlgpa_gpa_type_ind = 'I'
+ LEFT JOIN shrtmcm x
+        ON a.student_pidm = x.shrtmcm_pidm
+       AND x.shrtmcm_comment LIKE '%AP%'
      WHERE a.term_code = '202140'
        AND a.sgbstdn_styp_code = 'F'
        AND a.fterm_ind = 'Y'
@@ -234,6 +238,7 @@ LEFT JOIN (SELECT shrlgpa_pidm,
            u.sorhsch_gpa AS hs_gpa,
            v.sortest_test_score AS accuplacer_wri,
            w.sortest_test_score AS aleks,
+           a.ap_courses,
            a.stvcoll_desc,
            a.program,
            TRUNC(a.initial_reg_date) AS initial_reg_date,
@@ -315,6 +320,4 @@ LEFT JOIN (SELECT shrlgpa_pidm,
                 OR uu.sorhsch_sbgi_code IN ('459995','960000') ) u
         ON a.student_pidm = u.sorhsch_pidm
        AND u.rn = 1
-  ;
-
-
+  ; 
