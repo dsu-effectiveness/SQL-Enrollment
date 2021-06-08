@@ -24,8 +24,9 @@ test_scores AS (
               FROM (SELECT aaa.sortest_pidm,
                            aaa.sortest_test_score,
                            CASE
-                               WHEN aaa.sortest_tesc_code IN ('A02','A02N') THEN 'A02'
-                               WHEN aaa.sortest_tesc_code IN ('ALEKS','ALEKSN') THEN 'ALEKS'
+                               -- We do not care whether test is more or less than two years old; collapse code.
+                               WHEN aaa.sortest_tesc_code = 'A02N' THEN 'A02'
+                               WHEN aaa.sortest_tesc_code = 'ALEKSN' THEN 'ALEKS'
                                ELSE aaa.sortest_tesc_code
                                END AS sortest_tesc_code
                       FROM sortest aaa
