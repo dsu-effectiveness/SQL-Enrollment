@@ -13,23 +13,21 @@ test_scores AS (
            a.sortest_tesc_code,
            a.sortest_test_score
       FROM (SELECT aa.sortest_pidm,
-                   -- We do not care if the test is more or less than two years old, so we collapse codes.
-                   CASE WHEN aa.sortest_tesc_code IN ('A02','A02N') THEN 'A02'
-                        WHEN aa.sortest_tesc_code IN ('ALEKS','ALEKSN') THEN 'ALEKS'
-                        ELSE aa.sortest_tesc_code
-                        END AS sortest_tesc_code,
+                   aa.sortest_tesc_code,
                    aa.sortest_test_score,
-                   RANK() OVER (PARTITION BY aa.sortest_pidm,
-                                             CASE WHEN aa.sortest_tesc_code IN ('A02','A02N') THEN 'A02'
-                                             WHEN aa.sortest_tesc_code IN ('ALEKS','ALEKSN') THEN 'ALEKS'
-                                             ELSE aa.sortest_tesc_code
-                                             END
-                                    ORDER BY aa.sortest_test_score DESC) AS rowrank
-              FROM sortest aa
-             WHERE aa.sortest_tesc_code IN ('A02','A02N','A01','A05','CPTW','ALEKS','ALEKSN')) a
+                   ROW_NUMBER() OVER (PARTITION BY aa.sortest_pidm, aa.sortest_tesc_code ORDER BY aa.sortest_test_score DESC) AS rowrank
+              FROM (SELECT aaa.sortest_pidm,
+                           aaa.sortest_test_score,
+                           CASE
+                               WHEN aaa.sortest_tesc_code IN ('A02','A02N') THEN 'A02'
+                               WHEN aaa.sortest_tesc_code IN ('ALEKS','ALEKSN') THEN 'ALEKS'
+                               ELSE aaa.sortest_tesc_code
+                               END AS sortest_tesc_code
+                      FROM sortest aaa
+                     WHERE aaa.sortest_tesc_code IN ('A02','A02N','A01','A05','CPTW','ALEKS','ALEKSN') ) aa
+            ) a
       WHERE a.rowrank = 1
        ),
-
 student_list AS (
       SELECT f.sfrstcr_term_code AS term_code,
              g.stvterm_desc,
@@ -39,7 +37,6 @@ student_list AS (
              j.stvcoll_desc,
              f.sgbstdn_pidm AS student_pidm,
              f.sgbstdn_styp_code,
-             x.spriden_id,
              f.sgbstdn_program,
              CASE WHEN y.sgbstdn_pidm IS NOT NULL THEN 'Y'
                   ELSE 'N'
@@ -73,9 +70,6 @@ student_list AS (
            ON f.sgbstdn_levl_code = h.stvlevl_code
     LEFT JOIN stvcoll j
            ON f.sgbstdn_coll_code_1 = j.stvcoll_code
-    LEFT JOIN spriden x
-           ON f.sgbstdn_pidm = x.spriden_pidm
-          AND x.spriden_change_ind IS NULL
     LEFT JOIN sgbstdn y
            ON f.sgbstdn_pidm = y.sgbstdn_pidm
           AND y.sgbstdn_styp_code = f.sgbstdn_styp_code
@@ -84,7 +78,7 @@ student_list AS (
 stus AS (
     SELECT a.student_pidm,
            a.stvterm_desc,
-           a.spriden_id AS dixie_id,
+           b.spriden_id AS dixie_id,
            b.spriden_first_name AS first_name,
            b.spriden_last_name AS last_name,
            f.hsgpact_hsgpact AS index_score,
@@ -220,7 +214,7 @@ LEFT JOIN (SELECT shrlgpa_pidm,
        AND a.fterm_ind = 'Y'
   GROUP BY a.student_pidm,
            a.stvterm_desc,
-           a.spriden_id,
+           b.spriden_id,
            b.spriden_first_name,
            b.spriden_last_name,
            f.hsgpact_hsgpact,
@@ -308,10 +302,10 @@ LEFT JOIN (SELECT shrlgpa_pidm,
  LEFT JOIN test_scores t
         ON a.student_pidm = t.sortest_pidm
        AND t.sortest_tesc_code = 'A05'
- LEFT JOIN sortest v
+ LEFT JOIN test_scores v
         ON a.student_pidm = v.sortest_pidm
        AND v.sortest_tesc_code = 'CPTW'
- LEFT JOIN sortest w
+ LEFT JOIN test_scores w
         ON a.student_pidm = w.sortest_pidm
        AND w.sortest_tesc_code = 'ALEKS'
  LEFT JOIN sfrblpa r
