@@ -90,7 +90,6 @@ stus AS (
            b.spriden_id AS dixie_id,
            b.spriden_first_name AS first_name,
            b.spriden_last_name AS last_name,
-           f.hsgpact_hsgpact AS index_score,
            a.stvcoll_desc,
            j.smrprle_program_desc AS program,
            h.sfbetrm_initial_reg_date AS initial_reg_date,
@@ -159,8 +158,6 @@ stus AS (
                AND dd.ssbsect_ssts_code = 'A'
              GROUP BY mm.sfrstcr_pidm) n
         ON a.student_pidm = n.sfrstcr_pidm
- LEFT JOIN dsc.hsgpact f
-        ON a.student_pidm = f.hsgpact_pidm
  LEFT JOIN sgbstdn g
         ON a.student_pidm = g.sgbstdn_pidm
        AND a.term_code = g.sgbstdn_term_code_eff
@@ -206,7 +203,6 @@ LEFT JOIN (SELECT shrlgpa_pidm,
            b.spriden_id,
            b.spriden_first_name,
            b.spriden_last_name,
-           f.hsgpact_hsgpact,
            a.stvcoll_desc,
            j.smrprle_program_desc,
            h.sfbetrm_initial_reg_date,
@@ -236,7 +232,7 @@ LEFT JOIN (SELECT shrlgpa_pidm,
                 ELSE 'N'
                 END AS pell_award,
            p.stvresd_desc,
-           a.index_score,
+           ROUND((t.sortest_test_score + (u.sorhsch_gpa*10)),1) AS index_score,
            t.sortest_test_score AS act_score,
            q.sortest_test_score AS act_math,
            s.sortest_test_score AS act_english,
