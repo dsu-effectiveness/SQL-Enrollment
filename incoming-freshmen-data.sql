@@ -1,12 +1,17 @@
-  WITH enrolled_students AS (
-      SELECT DISTINCT
-             a.sfrstcr_term_code,
-             a.sfrstcr_pidm
+  WITH enrolled_courses AS (
+      SELECT a.sfrstcr_term_code,
+             a.sfrstcr_pidm,
+             a.sfrstcr_crn,
+             a.sfrstcr_credit_hr,
+             CASE WHEN b.stvrsts_incl_sect_enrl = 'Y' THEN 'Y'
+                  WHEN a.sfrstcr_rsts_code = 'WL' THEN 'WL'
+                  ELSE 'N'
+                  END AS stvrsts_incl_sect_enrl
         FROM sfrstcr a
-       WHERE a.sfrstcr_levl_code = 'UG'
-         AND a.sfrstcr_rsts_code IN (SELECT b.stvrsts_code
-                                       FROM stvrsts b
-                                      WHERE b.stvrsts_incl_sect_enrl = 'Y')
+  INNER JOIN stvrsts b
+          ON a.sfrstcr_rsts_code = b.stvrsts_code
+       WHERE a.sfrstcr_camp_code <> 'XXX'
+         AND a.sfrstcr_levl_code = 'UG'
       ),
 test_scores AS (
     SELECT a.sortest_pidm,
@@ -56,7 +61,11 @@ student_list AS (
                           END AS sgbstdn_coll_code_1,
                      a.sgbstdn_program_1 AS sgbstdn_program
                 FROM sgbstdn a
-          INNER JOIN enrolled_students b
+          INNER JOIN (SELECT DISTINCT
+                             sfrstcr_term_code,
+                             sfrstcr_pidm
+                        FROM enrolled_courses
+                       WHERE stvrsts_incl_sect_enrl = 'Y') b
                   ON a.sgbstdn_pidm = b.sfrstcr_pidm
                WHERE a.sgbstdn_stst_code = 'AS'
                  AND SUBSTR(b.sfrstcr_term_code, 1, 4) BETWEEN '2012' AND '2021'
@@ -112,16 +121,10 @@ stus AS (
  LEFT JOIN spriden b
         ON a.student_pidm = b.spriden_pidm
        AND b.spriden_change_ind IS NULL
- LEFT JOIN (SELECT *
-              FROM sfrstcr
-             WHERE sfrstcr_camp_code <> 'XXX'
-               AND sfrstcr_levl_code = 'UG'
-               AND sfrstcr_term_code = '202140'
-               AND sfrstcr_rsts_code IN (SELECT stvrsts_code
-                                           FROM stvrsts
-                                          WHERE stvrsts_incl_sect_enrl = 'Y')) c
+ LEFT JOIN enrolled_courses c
         ON a.term_code = c.sfrstcr_term_code
        AND a.student_pidm = c.sfrstcr_pidm
+       AND c.stvrsts_incl_sect_enrl = 'Y'
  LEFT JOIN ssbsect d
         ON c.sfrstcr_crn = d.ssbsect_crn
        AND c.sfrstcr_term_code = d.ssbsect_term_code
@@ -134,41 +137,27 @@ stus AS (
                    LISTAGG(CASE WHEN dd.ssbsect_subj_code NOT IN ('ENGL', 'MATH') THEN dd.ssbsect_subj_code || dd.ssbsect_crse_numb ELSE NULL
                                 END, ', ' ON overflow truncate without count)
                                 WITHIN GROUP (ORDER BY dd.ssbsect_crse_numb) AS oth_prior
-              FROM (SELECT DISTINCT
-                           sfrstcr_term_code,
-                           sfrstcr_pidm,
-                           sfrstcr_crn
-                      FROM sfrstcr
-                     WHERE sfrstcr_camp_code <> 'XXX'
-                       AND sfrstcr_levl_code = 'UG'
-                       AND sfrstcr_term_code < '202140'
-                       AND sfrstcr_rsts_code IN (SELECT stvrsts_code
-                                                   FROM stvrsts
-                                                  WHERE stvrsts_incl_sect_enrl = 'Y')) cc
-                LEFT JOIN ssbsect dd
-                       ON cc.sfrstcr_crn = dd.ssbsect_crn
-                      AND cc.sfrstcr_term_code = dd.ssbsect_term_code
-                      AND dd.ssbsect_ssts_code = 'A'
-                    GROUP BY cc.sfrstcr_pidm) gg
+              FROM enrolled_courses cc
+         LEFT JOIN ssbsect dd
+                ON cc.sfrstcr_crn = dd.ssbsect_crn
+               AND cc.sfrstcr_term_code = dd.ssbsect_term_code
+               AND cc.sfrstcr_term_code < '202140'
+               AND cc.stvrsts_incl_sect_enrl = 'Y'
+               AND dd.ssbsect_ssts_code = 'A'
+             GROUP BY cc.sfrstcr_pidm) gg
         ON a.student_pidm = gg.sfrstcr_pidm
  LEFT JOIN (SELECT mm.sfrstcr_pidm,
                    LISTAGG(CASE WHEN dd.ssbsect_subj_code NOT IN ('ENGL', 'MATH') THEN dd.ssbsect_subj_code || dd.ssbsect_crse_numb ELSE NULL
                                 END, ', ' ON overflow truncate without count)
                                 WITHIN GROUP (ORDER BY dd.ssbsect_crse_numb) AS waitlisted
-              FROM (SELECT DISTINCT
-                           sfrstcr_term_code,
-                           sfrstcr_pidm,
-                           sfrstcr_crn
-                      FROM sfrstcr
-                     WHERE sfrstcr_camp_code <> 'XXX'
-                       AND sfrstcr_levl_code = 'UG'
-                       AND sfrstcr_term_code = '202140'
-                       AND sfrstcr_rsts_code = 'WL') mm
-                LEFT JOIN ssbsect dd
-                       ON mm.sfrstcr_crn = dd.ssbsect_crn
-                      AND mm.sfrstcr_term_code = dd.ssbsect_term_code
-                      AND dd.ssbsect_ssts_code = 'A'
-                    GROUP BY mm.sfrstcr_pidm) n
+              FROM enrolled_courses mm
+         LEFT JOIN ssbsect dd
+                ON mm.sfrstcr_crn = dd.ssbsect_crn
+               AND mm.sfrstcr_term_code = dd.ssbsect_term_code
+               AND mm.sfrstcr_term_code = '202140'
+               AND mm.stvrsts_incl_sect_enrl = 'WL'
+               AND dd.ssbsect_ssts_code = 'A'
+             GROUP BY mm.sfrstcr_pidm) n
         ON a.student_pidm = n.sfrstcr_pidm
  LEFT JOIN dsc.hsgpact f
         ON a.student_pidm = f.hsgpact_pidm
